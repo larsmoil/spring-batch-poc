@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:batch="http://www.springframework.org/schema/batch"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+                           http://www.springframework.org/schema/batch http://www.springframework.org/schema/batch/spring-batch-2.1.xsd
+                           http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
+                           http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-3.0.xsd">
+
+    <import resource="classpath:/common-services.xml"/>
+    <context:property-placeholder location="classpath:/batch.properties"/>
+
+    <batch:job id="slowJob">
+        <batch:step id="slowStep">
+            <batch:tasklet>
+                <batch:chunk reader="itemReader"
+                             processor="itemProcessor"
+                             writer="singleItemWriter"
+                             commit-interval="${batch.commit-interval}"/>
+            </batch:tasklet>
+            <batch:listeners>
+                <batch:listener ref="stepProgressListener" />
+            </batch:listeners>
+        </batch:step>
+    </batch:job>
+    <batch:job id="parallelJob">
+        <batch:step id="paralellStep" next="sortStep">
+            <batch:tasklet task-executor="taskExecutor" throttle-limit="${batch.grid.size}">
+                <batch:chunk reader="itemReader"
+                             processor="itemProcessor"
+                             writer="parallelItemWriter"
+                             commit-interval="${batch.commit-interval}"/>
+            </batch:tasklet>
+            <batch:listeners>
+                <batch:listener ref="stepProgressListener" />
+            </batch:listeners>
+        </batch:step>
+        <batch:step id="sortStep">
+            <batch:tasklet>
+                <batch:chunk reader="sortItemReader"
+                             writer="sortItemWriter"
+                             commit-interval="${batch.commit-interval}"/>
+            </batch:tasklet>
+            <batch:listeners>
+                <batch:listener ref="stepProgressListener" />
+            </batch:listeners>
+        </batch:step>
+    </batch:job>
+
+    <bean id="itemReader" class="com.github.larsmoil.reader.ExampleItemReader" scope="step" />
+    <bean id="itemProcessor" class="com.github.larsmoil.processor.SlowItemProcessor"/>
+    <bean id="singleItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+        <property name="lineAggregator" ref="lineAggregator"/>
+        <property name="resource" value="${linear.sorted-file}" />
+    </bean>
+    <bean id="parallelItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+        <property name="lineAggregator"  ref="lineAggregator" />
+        <property name="resource" value="${parallel.unsorted-file}" />
+    </bean>
+
+    <bean id="sortItemReader" class="com.github.larsmoil.reader.SortingItemReader">
+        <constructor-arg>
+            <bean class="org.springframework.batch.item.file.FlatFileItemReader" init-method="doOpen" scope="step">
+                <property name="lineMapper" ref="lineMapper"/>
+                <property name="resource" value="${parallel.unsorted-file}"/>
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="sortComparator"/>
+    </bean>
+    <bean id="sortItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+        <property name="lineAggregator" ref="lineAggregator"/>
+        <property name="resource" value="${parallel.sorted-file}" />
+    </bean>
+    <bean id="lineAggregator" class="org.springframework.batch.item.file.transform.PassThroughLineAggregator"/>
+    <bean id="lineMapper" class="org.springframework.batch.item.file.mapping.PassThroughLineMapper"/>
+    <bean id="sortComparator" class="com.github.larsmoil.comparator.SortComparator"/>
+
+    <bean id="taskExecutor" class="org.springframework.core.task.SimpleAsyncTaskExecutor"/>
+
+    <bean id="stepProgressListener" class="com.github.larsmoil.listener.StepProgressListener" />
+
+</beans>
