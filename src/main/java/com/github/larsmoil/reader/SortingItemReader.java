@@ -18,7 +18,7 @@ public class SortingItemReader<T> implements ItemReader<T> {
     private final LinkedList<T> items;
     private boolean initialized;
 
-    public SortingItemReader(final ItemReader<T> delegate, final Comparator<T> comparator) throws Exception {
+    public SortingItemReader(final ItemReader<T> delegate, final Comparator<T> comparator) {
         this.delegate = delegate;
         this.comparator = comparator;
         items = new LinkedList<T>();
